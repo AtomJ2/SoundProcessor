@@ -1,49 +1,97 @@
 #include <iostream>
-#include <string>
+#include "wavefc.h"
 
-void SendSms(const std::string& number, const std::string& message);
-void SendEmail(const std::string& email, const std::string& message);
-
-
-class INotifier {
-public:
-    virtual void Notify(const std::string& message) const = 0;
-};
-
-class SmsNotifier : public INotifier {
-public:
-    SmsNotifier(const std::string& phoneNumber) : phoneNumber(phoneNumber) {}
-
-    void Notify(const std::string& message) const override {
-        SendSms(phoneNumber, message);
+// input.txt outwave.wav district_four.wav severe_tire_damage.wav funkorama.wav
+int main(int argc, char* argv[]) {
+    try {
+        if (argc < 4) {
+            if (std::strcmp(argv[1], "-h") == 0) {
+                std::cout << "sound_processor.exe the_name_of_commands_file.txt the_name_of_output_file.wav wav_files_to_convert.wav ..." << std::endl;
+                return 0;
+            }
+            throw wavefc::TooFewArguments();
+        }
+        wavefc::CommandsReader cmdreader(argc, argv);
+        std::string output_file_name = cmdreader.get_files().at(0);
+        std::ofstream ofs;
+        ofs.open(output_file_name, std::ios::out);
+        if (!ofs.is_open()) {
+            throw wavefc::FailFileOpening();
+        }
+        ofs.close();
+        for (;;) {
+            std::vector<std::string> cmd = cmdreader.read_command();
+            if (cmd.at(0) == "None") {
+                break;
+            }
+            if (cmd.at(0) == "mute") {
+                int sec1 = std::stoi(cmd.at(2));
+                int sec2 = std::stoi(cmd.at(3));
+                if (sec2 < sec1)
+                    throw wavefc::WrongTimeInterval();
+                std::unique_ptr<wavefc::Convertor> mute_convertor = std::make_unique<wavefc::MuteConvertor>(sec1, sec2);
+                mute_convertor->convert(cmd, output_file_name);
+            }
+            else {
+                if (cmd.at(0) == "mix") {
+                    int sec1 = std::stoi(cmd.at(3));
+                    int sec2 = std::stoi(cmd.at(4));
+                    if (sec2 < sec1)
+                        throw wavefc::WrongTimeInterval();;
+                    std::unique_ptr<wavefc::Convertor> mix_convertor = std::make_unique<wavefc::MixConvertor>(sec1, sec2);
+                    mix_convertor->convert(cmd, output_file_name);
+                }
+                else {
+                    if (cmd.at(0) == "reverse") {
+                        std::unique_ptr<wavefc::Convertor> reverse_convertor = std::make_unique<wavefc::ReverseConvertor>();
+                        reverse_convertor->convert(cmd, output_file_name);
+                    }
+                    else
+                        throw wavefc::WrongConvertion();
+                }
+            }
+        }
     }
 
-private:
-    std::string phoneNumber;
-};
-
-class EmailNotifier : public INotifier {
-public:
-    EmailNotifier(const std::string& emailAddress) : emailAddress(emailAddress) {}
-
-    void Notify(const std::string& message) const override {
-        SendEmail(emailAddress, message);
+    catch (wavefc::FailFileOpening err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
     }
 
-private:
-    std::string emailAddress;
-};
+    catch (wavefc::FailReadingFromFile err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
 
-// Пример использования
-int main() {
-    std::string phoneNumber = "1234567890";
-    std::string emailAddress = "example@example.com";
+    catch (wavefc::FailWritingInFile err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
 
-    SmsNotifier smsNotifier(phoneNumber);
-    EmailNotifier emailNotifier(emailAddress);
+    catch (wavefc::WrongTimeInterval err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
 
-    smsNotifier.Notify("Hello, SMS!");
-    emailNotifier.Notify("Hello, email!");
+    catch (wavefc::TooFewArguments err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
+
+    catch (wavefc::WrongConvertion err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
+
+    catch (wavefc::NoSecond err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
+
+    catch (wavefc::WrongCommandSyntax err) {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
 
     return 0;
 }
